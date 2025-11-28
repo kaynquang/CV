@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+.venv/
+venv/
+env/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temp
+*.png
+*.mp3
+*.tmp
+
+# Data (keep structure, ignore large files)
+data/correct/*.mp4
+data/incorrect/*.mp4
