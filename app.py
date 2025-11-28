@@ -96,6 +96,7 @@ if st.button(" BẮT ĐẦU", type="primary", use_container_width=True):
     counter = 0
     state = None
     buffer = []
+    goc_up = []  # Lưu góc khi ở trạng thái UP
     NGUONG_LEN = 160
     NGUONG_XUONG = 90
     
@@ -114,15 +115,35 @@ if st.button(" BẮT ĐẦU", type="primary", use_container_width=True):
             
             # State machine
             if state is None and goc > NGUONG_LEN:
-                state = "UP"
-            elif state == "UP" and goc < NGUONG_XUONG:
-                state = "DOWN"
-                buffer = [goc]
+                state = "READY"  # Chờ ổn định trước khi bắt đầu
+                ready_count = 0
+                goc_up = [goc]
+            elif state == "READY":
+                goc_up.append(goc)
+                ready_count += 1
+                # Đợi 8 frame ổn định ở tư thế UP
+                if ready_count >= 8:
+                    state = "UP"
+            elif state == "UP":
+                goc_up.append(goc)
+                if goc < NGUONG_XUONG:
+                    state = "DOWN"
+                    # Bắt đầu buffer từ đỉnh (lấy 8 frame cuối ở UP)
+                    buffer = goc_up[-8:] + [goc] if len(goc_up) >= 8 else goc_up + [goc]
+                    goc_up = []
             elif state == "DOWN":
                 buffer.append(goc)
                 if goc > NGUONG_LEN:
+                    state = "FINISH"  # Chờ duỗi hết tay
+                    finish_count = 0
+            elif state == "FINISH":
+                buffer.append(goc)
+                finish_count += 1
+                # Đợi thêm 5-10 frame để user duỗi hết tay
+                if finish_count >= 8 or goc < NGUONG_LEN - 20:
                     state = "UP"
                     counter += 1
+                    goc_up = [goc]
                     
                     if len(buffer) > 5:
                         kq = phan_tich(buffer, model)
@@ -130,12 +151,14 @@ if st.button(" BẮT ĐẦU", type="primary", use_container_width=True):
                         # Chart
                         chart_ph.image(ve_chart(buffer, model, kq), use_container_width=True)
                         
-                        # Lỗi
+                        # Feedback
                         if kq['loi']:
                             loi_ph.warning(" " + ", ".join(kq['loi']))
-                            noi(kq['loi'][0])
+                            # TTS nói gợi ý cải thiện
+                            if kq['goi_y']:
+                                noi(kq['goi_y'][0])
                         else:
-                            loi_ph.success(" Tốt!")
+                            loi_ph.success("Tốt!")
                             if counter % 3 == 0:
                                 noi("Tốt lắm")
                     
@@ -151,4 +174,4 @@ if st.button(" BẮT ĐẦU", type="primary", use_container_width=True):
     
     cap.release()
     pose.close()
-    st.success(f"🎉 Xong {counter} rep!")
+    st.success(f"Xong {counter} rep!")

@@ -76,38 +76,63 @@ def so_sanh(qd_user, qd_chuan):
     return round((cos_sim * 0.5 + max(0, corr) * 0.5) * 100, 1)
 
 def phan_tich(quy_dao, model):
-    """Phân tích rep, trả về điểm + lỗi"""
+    """Phân tích rep, trả về điểm + lỗi + gợi ý"""
     u = chuan_hoa(quy_dao)
     c = model['mean']
+    n = len(c)
     
     do_giong = so_sanh(quy_dao, c)
     
-    # Phân tích lỗi
     loi = []
+    goi_y = []  # Gợi ý cải thiện cho TTS
     
     # 1. Độ sâu
-    if (1 - u.min()) < 0.8:
+    if (1 - u.min()) < 0.7:
         loi.append("Xuống chưa sâu")
+        goi_y.append("Xuống sâu hơn")
     
-    # 2. Tempo
+    # 2. Tempo - vị trí đáy
     valley_u = np.argmin(u)
     valley_c = np.argmin(c)
-    if valley_u < valley_c * 0.6:
-        loi.append("Xuống quá nhanh")
-    elif valley_u > valley_c * 1.4:
-        loi.append("Lên quá nhanh")
     
-    # 3. Độ mượt
+    if valley_u < valley_c * 0.7:
+        loi.append("Xuống quá nhanh")
+        goi_y.append("Xuống chậm lại")
+    elif valley_u > valley_c * 1.3:
+        loi.append("Lên quá nhanh")  
+        goi_y.append("Lên chậm lại")
+    
+    # 3. Pha lên - so sánh nửa sau
+    pha_len_u = u[n//2:]
+    pha_len_c = c[n//2:]
+    if np.mean(pha_len_u) < np.mean(pha_len_c) * 0.7:
+        loi.append("Lên chưa hết")
+        goi_y.append("Duỗi hết tay")
+    
+    # 4. Độ mượt
     jerk_u = np.mean(np.abs(np.diff(u, 2)))
     jerk_c = np.mean(np.abs(np.diff(c, 2)))
-    if jerk_u > jerk_c * 2:
+    if jerk_u > jerk_c * 1.8:
         loi.append("Chuyển động giật")
+        goi_y.append("Mượt hơn")
+    
+    # 5. Đối xứng (pha xuống vs pha lên)
+    pha_xuong = u[:valley_u+1] if valley_u > 0 else u[:1]
+    pha_len = u[valley_u:] if valley_u < len(u) else u[-1:]
+    if len(pha_xuong) > 3 and len(pha_len) > 3:
+        ti_le = len(pha_xuong) / len(pha_len)
+        if ti_le < 0.5:
+            loi.append("Xuống quá nhanh so với lên")
+            goi_y.append("Xuống chậm, lên nhanh")
+        elif ti_le > 2:
+            loi.append("Lên quá nhanh so với xuống")
+            goi_y.append("Giữ nhịp đều")
     
     # Điểm = độ giống - penalty lỗi
     diem = do_giong - len(loi) * 8
     diem = max(0, min(100, diem))
     
-    return {'diem': diem, 'do_giong': do_giong, 'loi': loi}
+    return {'diem': diem, 'do_giong': do_giong, 'loi': loi, 'goi_y': goi_y}
 
 # === MODEL ===
 def tao_model(danh_sach_quy_dao):
